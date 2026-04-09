@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brokerage Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #05080d;
+      --surface:     #090e16;
+      --surface-2:   #0e1622;
+      --surface-3:   #121c2e;
+      --border:      #1a2a3a;
+      --border-2:    #243548;
+      --accent:      #38bdf8;
+      --accent-dim:  #0c4a6e;
+      --positive:    #22c55e;
+      --positive-bg: #052010;
+      --negative:    #f43f5e;
+      --negative-bg: #200510;
+      --warning:     #f59e0b;
+      --text:        #c8d8e8;
+      --text-muted:  #4a6278;
+      --text-dim:    #2a3e52;
+      --text-bright: #eaf4ff;
+      --pending:     #f59e0b;
+      --rejected:    #f43f5e;
+      --filled:      #22c55e;
+      --font-display: 'Cormorant Garamond', Georgia, serif;
+      --font-data:    'JetBrains Mono', 'Consolas', monospace;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-data); font-size: 13px; overflow: hidden; }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── Top bar ─────────────────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; gap: 24px;
+      padding: 0 24px; height: 52px; flex-shrink: 0;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .topbar-brand {
+      font-family: var(--font-display); font-size: 20px; font-weight: 600;
+      letter-spacing: 0.04em; color: var(--text-bright); flex-shrink: 0;
+    }
+    .topbar-brand span { color: var(--accent); font-style: italic; }
+    .topbar-spacer { flex: 1; }
+    .market-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted);
+    }
+    .market-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--negative);
+      box-shadow: 0 0 0 0 var(--negative);
+    }
+    .market-dot.open {
+      background: var(--positive);
+      box-shadow: 0 0 0 0 var(--positive);
+      animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+      70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+    .topbar-clock { font-size: 11px; color: var(--text-muted); letter-spacing: 0.06em; min-width: 80px; text-align: right; }
+
+    /* ── Quote bar ───────────────────────────────────────────── */
+    .quote-bar {
+      display: flex; align-items: center; gap: 0;
+      border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+      background: var(--surface-2);
+    }
+    .quote-bar input {
+      background: transparent; border: none; outline: none;
+      color: var(--text-bright); font-family: var(--font-data); font-size: 12px;
+      padding: 6px 10px; width: 80px; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .quote-bar input::placeholder { color: var(--text-dim); text-transform: none; letter-spacing: 0; }
+    .quote-bar button {
+      background: var(--accent-dim); border: none; cursor: pointer;
+      color: var(--accent); font-family: var(--font-data); font-size: 11px;
+      padding: 6px 12px; letter-spacing: 0.06em; transition: background 0.15s;
+    }
+    .quote-bar button:hover { background: #155e7a; }
+
+    /* ── Quote result ─────────────────────────────────────────── */
+    .quote-result {
+      display: flex; align-items: center; gap: 16px;
+      font-size: 12px; color: var(--text-muted); white-space: nowrap;
+    }
+    .quote-result .q-symbol { color: var(--accent); font-weight: 500; font-size: 11px; letter-spacing: 0.08em; }
+    .quote-result .q-price { color: var(--text-bright); font-size: 13px; }
+    .quote-result .q-bid  { color: var(--text-muted); }
+    .quote-result .q-ask  { color: var(--text-muted); }
+    .quote-result .q-val  { color: var(--text); }
+    .quote-error { font-size: 11px; color: var(--negative); }
+
+    /* ── Body ────────────────────────────────────────────────── */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ─────────────────────────────────────────────── */
+    .sidebar {
+      width: 230px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      background: var(--surface); border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 16px 16px 10px;
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--text-dim); border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .sidebar-header button {
+      background: none; border: 1px solid var(--border-2); border-radius: 3px;
+      color: var(--accent); font-family: var(--font-data); font-size: 10px;
+      padding: 3px 8px; cursor: pointer; letter-spacing: 0.06em;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .sidebar-header button:hover { background: var(--accent-dim); border-color: var(--accent); }
+    .account-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+    .account-item {
+      padding: 10px 16px; cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .account-item:hover { background: var(--surface-2); }
+    .account-item.active {
+      background: var(--surface-2); border-left-color: var(--accent);
+    }
+    .account-item .ac-name { color: var(--text-bright); font-size: 12px; margin-bottom: 3px; }
+    .account-item .ac-balance { color: var(--text-muted); font-size: 11px; }
+    .account-item.active .ac-balance { color: var(--accent); }
+    .sidebar-empty { padding: 24px 16px; color: var(--text-dim); font-size: 11px; }
+
+    /* New account modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; backdrop-filter: blur(2px);
+    }
+    .modal {
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 6px; padding: 24px; width: 300px;
+    }
+    .modal h3 {
+      font-family: var(--font-display); font-size: 18px; font-weight: 400;
+      color: var(--text-bright); margin-bottom: 16px;
+    }
+    .modal input {
+      width: 100%; background: var(--surface-3); border: 1px solid var(--border-2);
+      border-radius: 4px; color: var(--text-bright); font-family: var(--font-data);
+      font-size: 13px; padding: 9px 12px; outline: none; margin-bottom: 12px;
+      transition: border-color 0.15s;
+    }
+    .modal input:focus { border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn { padding: 7px 16px; border-radius: 4px; font-family: var(--font-data); font-size: 12px; cursor: pointer; border: 1px solid; transition: background 0.15s; letter-spacing: 0.04em; }
+    .btn-primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .btn-primary:hover { background: #155e7a; }
+    .btn-ghost { background: transparent; border-color: var(--border-2); color: var(--text-muted); }
+    .btn-ghost:hover { background: var(--surface-3); color: var(--text); }
+
+    /* ── Main content ────────────────────────────────────────── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Account header */
+    .account-header {
+      padding: 20px 28px 0;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .account-header h1 {
+      font-family: var(--font-display); font-size: 28px; font-weight: 300;
+      color: var(--text-bright); letter-spacing: 0.02em; margin-bottom: 16px;
+    }
+    .account-stats {
+      display: flex; gap: 40px; margin-bottom: 16px;
+    }
+    .stat { display: flex; flex-direction: column; gap: 3px; }
+    .stat-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
+    .stat-value {
+      font-family: var(--font-display); font-size: 26px; font-weight: 300;
+      color: var(--text-bright); letter-spacing: 0.01em;
+    }
+    .stat-value.positive { color: var(--positive); }
+    .stat-value.negative { color: var(--negative); }
+    .stat-value.accent { color: var(--accent); }
+    .stat-sub { font-size: 11px; color: var(--text-muted); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0; padding: 0 28px; }
+    .tab-btn {
+      background: none; border: none; cursor: pointer;
+      font-family: var(--font-data); font-size: 11px; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-muted);
+      padding: 10px 16px 9px; border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Tab content area */
+    .tab-content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+    /* ── Empty / loading / error states ─────────────────────── */
+    .empty-state { color: var(--text-dim); font-size: 12px; padding: 40px 0; text-align: center; }
+    .loading { color: var(--text-muted); font-size: 11px; letter-spacing: 0.08em; }
+    .loading::after { content: '...'; animation: dots 1.2s steps(4,end) infinite; }
+    @keyframes dots {
+      0%,20%  { content: '.'; }
+      40%     { content: '..'; }
+      60%,100%{ content: '...'; }
+    }
+    .error-msg { color: var(--negative); font-size: 11px; padding: 12px 0; }
+
+    /* ── Tables ──────────────────────────────────────────────── */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      text-align: left; font-size: 10px; font-weight: 500;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim); padding: 0 12px 10px; border-bottom: 1px solid var(--border);
+    }
+    .data-table th.right, .data-table td.right { text-align: right; }
+    .data-table td {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--text); vertical-align: middle;
+      transition: background 0.1s;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover td { background: var(--surface-2); }
+    .data-table .symbol { color: var(--text-bright); font-weight: 500; letter-spacing: 0.04em; }
+    .data-table .mono { font-variant-numeric: tabular-nums; }
+    .data-table .positive { color: var(--positive); }
+    .data-table .negative { color: var(--negative); }
+    .data-table .muted { color: var(--text-muted); }
+
+    /* Section headers */
+    .section-title {
+      font-family: var(--font-display); font-size: 18px; font-weight: 400;
+      color: var(--text-bright); margin-bottom: 16px; letter-spacing: 0.02em;
+    }
+    .section-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
+    .section-row .section-title { margin-bottom: 0; }
+    .section-meta { font-size: 11px; color: var(--text-muted); }
+
+    /* ── Badges ──────────────────────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .badge-filled  { background: var(--positive-bg); color: var(--positive); }
+    .badge-pending { background: #2a1f00; color: var(--warning); }
+    .badge-rejected{ background: var(--negative-bg); color: var(--negative); }
+    .badge-open    { background: #012a1a; color: var(--positive); }
+    .badge-closed  { background: var(--surface-3); color: var(--text-muted); }
+
+    /* ── Overview grid ───────────────────────────────────────── */
+    .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+    .overview-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 18px 20px;
+    }
+    .overview-card .oc-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+    .overview-card .oc-value {
+      font-family: var(--font-display); font-size: 32px; font-weight: 300;
+      color: var(--text-bright); letter-spacing: 0.01em;
+    }
+    .overview-card .oc-value.positive { color: var(--positive); }
+    .overview-card .oc-value.negative { color: var(--negative); }
+    .overview-card .oc-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .overview-card .oc-sub .positive { color: var(--positive); }
+    .overview-card .oc-sub .negative { color: var(--negative); }
+    .overview-warn { font-size: 11px; color: var(--warning); margin-top: 4px; }
+
+    /* ── Ledger entry type colors ────────────────────────────── */
+    .entry-DEPOSIT    { color: var(--positive); }
+    .entry-WITHDRAWAL { color: var(--warning); }
+    .entry-BUY        { color: var(--accent); }
+    .entry-SELL       { color: var(--text-bright); }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    .no-account {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px; color: var(--text-dim);
+    }
+    .no-account-icon {
+      font-family: var(--font-display); font-size: 64px; font-weight: 300;
+      color: var(--surface-3);
+    }
+    .no-account p { font-size: 12px; letter-spacing: 0.08em; }
+
+    /* ── Action forms ────────────────────────────────────────── */
+    .action-strip {
+      display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+    }
+    .modal-label {
+      font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 6px; display: block;
+    }
+    .modal-field { margin-bottom: 14px; }
+    .modal-field input, .modal-field select {
+      width: 100%; background: var(--surface-3); border: 1px solid var(--border-2);
+      border-radius: 4px; color: var(--text-bright); font-family: var(--font-data);
+      font-size: 13px; padding: 9px 12px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .modal-field input:focus, .modal-field select:focus { border-color: var(--accent); }
+    .modal-field select { cursor: pointer; }
+    .side-toggle { display: flex; gap: 0; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-2); }
+    .side-toggle button {
+      flex: 1; background: var(--surface-3); border: none; cursor: pointer;
+      font-family: var(--font-data); font-size: 12px; letter-spacing: 0.06em;
+      padding: 9px 0; color: var(--text-muted); transition: background 0.15s, color 0.15s;
+    }
+    .side-toggle button.buy.active  { background: var(--accent-dim); color: var(--accent); }
+    .side-toggle button.sell.active { background: var(--negative-bg); color: var(--negative); }
+    .modal-result {
+      margin-top: 12px; padding: 10px 12px; border-radius: 4px;
+      font-size: 12px; line-height: 1.5;
+    }
+    .modal-result.success { background: var(--positive-bg); color: var(--positive); }
+    .modal-result.error   { background: var(--negative-bg); color: var(--negative); }
+    .modal-result.pending { background: #2a1f00; color: var(--warning); }
+    .order-quote-preview {
+      margin-bottom: 14px; padding: 10px 12px; border-radius: 4px;
+      background: var(--surface-3); border: 1px solid var(--border-2);
+      font-size: 12px;
+    }
+    .order-quote-preview.not-found { color: var(--negative); border-color: var(--negative-bg); }
+    .order-quote-preview .oq-row { display: flex; justify-content: space-between; gap: 12px; }
+    .order-quote-preview .oq-label { color: var(--text-muted); }
+    .order-quote-preview .oq-spread { display: flex; gap: 16px; margin-top: 4px; }
+    .order-quote-preview .oq-bid { color: var(--negative); font-size: 15px; font-weight: 600; }
+    .order-quote-preview .oq-ask { color: var(--positive); font-size: 15px; font-weight: 600; }
+    .order-quote-preview .oq-loading { color: var(--text-muted); font-style: italic; }
+    .type-toggle { display: flex; gap: 0; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-2); margin-bottom: 14px; }
+    .type-toggle button {
+      flex: 1; background: var(--surface-3); border: none; cursor: pointer;
+      font-family: var(--font-data); font-size: 12px; letter-spacing: 0.06em;
+      padding: 9px 0; color: var(--text-muted); transition: background 0.15s, color 0.15s;
+    }
+    .type-toggle button.active-deposit  { background: var(--positive-bg); color: var(--positive); }
+    .type-toggle button.active-withdraw { background: #2a1a00; color: var(--warning); }
+    .type-toggle button.active-fee      { background: var(--negative-bg); color: var(--negative); }
+    .type-toggle button.active-reward   { background: var(--positive-bg); color: var(--positive); }
+    .type-toggle button.active { background: var(--accent-dim); color: var(--accent); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-brand">Brokerage <span>Terminal</span></div>
+
+    <!-- Quote lookup -->
+    <div class="quote-bar">
+      <input v-model="quoteSymbol" @keyup.enter="lookupQuote" placeholder="symbol" maxlength="12" />
+      <button @click="lookupQuote">QUOTE</button>
+    </div>
+
+    <div v-if="quoteLoading" class="loading" style="font-size:11px;color:var(--text-muted)">fetching</div>
+    <div v-else-if="quoteError" class="quote-error">{{ quoteError }}</div>
+    <div v-else-if="quote" class="quote-result">
+      <span class="q-symbol">{{ quote.symbol }}</span>
+      <span class="q-price">{{ fmtCurrency(quote.price) }}</span>
+      <span class="q-bid">B&nbsp;<span class="q-val">{{ quote.bid != null ? fmtCurrency(quote.bid) : '—' }}</span></span>
+      <span class="q-ask">A&nbsp;<span class="q-val">{{ quote.ask != null ? fmtCurrency(quote.ask) : '—' }}</span></span>
+      <span class="q-bid">{{ fmtTime(quote.timestamp) }}</span>
+    </div>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="market-status">
+      <div class="market-dot" :class="{ open: marketOpen }"></div>
+      <span>{{ marketOpen ? 'MARKET OPEN' : 'MARKET CLOSED' }}</span>
+      <span v-if="!marketOpen && nextOpen" style="color:var(--text-dim)">opens {{ fmtRelTime(nextOpen) }}</span>
+    </div>
+    <div class="topbar-clock">{{ clock }}</div>
+  </header>
+
+  <!-- Body -->
+  <div class="body">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span>Accounts</span>
+        <button @click="showNewAccount = true">+ NEW</button>
+      </div>
+      <div class="account-list">
+        <div v-if="accountsLoading" class="sidebar-empty loading">loading</div>
+        <div v-else-if="accounts.length === 0" class="sidebar-empty">No accounts yet.</div>
+        <div
+          v-for="acct in accounts" :key="acct.id"
+          class="account-item"
+          :class="{ active: selectedId === acct.id }"
+          @click="selectAccount(acct.id)"
+        >
+          <div class="ac-name">{{ acct.name }}</div>
+          <div class="ac-balance">{{ balanceCache[acct.id] != null ? fmtCurrency(balanceCache[acct.id]) : '···' }}</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- No selection -->
+      <div v-if="!selectedId" class="no-account">
+        <div class="no-account-icon">Σ</div>
+        <p>SELECT AN ACCOUNT</p>
+      </div>
+
+      <!-- Account detail -->
+      <template v-else>
+        <div class="account-header">
+          <h1>{{ selectedAccount?.name }}</h1>
+          <div class="account-stats">
+            <div class="stat">
+              <div class="stat-label">Cash Balance</div>
+              <div class="stat-value accent">{{ overview.balance != null ? fmtCurrency(overview.balance) : '···' }}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Buying Power</div>
+              <div class="stat-value" :class="buyingPowerClass">{{ overview.buyingPower != null ? fmtCurrency(overview.buyingPower) : '···' }}</div>
+              <div v-if="overview.pendingBuys > 0" class="stat-sub">{{ overview.pendingBuys }} pending order{{ overview.pendingBuys > 1 ? 's' : '' }} reserved</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Unrealized P&amp;L</div>
+              <div class="stat-value" :class="pnlClass(overview.unrealizedPnl)">{{ overview.unrealizedPnl != null ? fmtPnl(overview.unrealizedPnl) : '···' }}</div>
+              <div v-if="overview.unrealizedPct != null" class="stat-sub" :class="pnlClass(overview.unrealizedPnl)">{{ fmtPct(overview.unrealizedPct) }}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Realized P&amp;L</div>
+              <div class="stat-value" :class="pnlClass(overview.realizedPnl)">{{ overview.realizedPnl != null ? fmtPnl(overview.realizedPnl) : '···' }}</div>
+            </div>
+          </div>
+          <div class="tabs">
+            <button v-for="t in tabs" :key="t.id" class="tab-btn" :class="{ active: activeTab === t.id }" @click="switchTab(t.id)">
+              {{ t.label }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab content -->
+        <div class="tab-content">
+
+          <!-- Overview -->
+          <template v-if="activeTab === 'overview'">
+            <div v-if="overviewLoading" class="loading">loading overview</div>
+            <div v-else>
+              <div class="action-strip">
+                <button class="btn btn-primary" @click="showTransferModal = true">+ Deposit / Withdraw</button>
+                <button class="btn btn-ghost" @click="openOrderModal()">⬡ Place Order</button>
+              </div>
+              <div class="overview-grid">
+                <div class="overview-card">
+                  <div class="oc-label">Cash Balance</div>
+                  <div class="oc-value accent">{{ fmtCurrency(overview.balance ?? 0) }}</div>
+                </div>
+                <div class="overview-card">
+                  <div class="oc-label">Buying Power</div>
+                  <div class="oc-value" :class="buyingPowerClass">{{ fmtCurrency(overview.buyingPower ?? 0) }}</div>
+                  <div v-if="overview.pendingBuys > 0" class="oc-sub">{{ fmtCurrency(overview.reserved) }} reserved in {{ overview.pendingBuys }} pending order{{ overview.pendingBuys > 1 ? 's' : '' }}</div>
+                  <div v-if="overview.unpricedSymbols?.length" class="overview-warn">⚠ unpriced: {{ overview.unpricedSymbols.join(', ') }}</div>
+                </div>
+                <div class="overview-card">
+                  <div class="oc-label">Unrealized P&amp;L</div>
+                  <div class="oc-value" :class="pnlClass(overview.unrealizedPnl)">{{ fmtPnl(overview.unrealizedPnl ?? 0) }}</div>
+                  <div class="oc-sub">
+                    Market value <span>{{ fmtCurrency(overview.marketValue ?? 0) }}</span>
+                    &nbsp;·&nbsp; Cost basis <span>{{ fmtCurrency(overview.costBasis ?? 0) }}</span>
+                  </div>
+                  <div v-if="overview.unpricedPositions?.length" class="overview-warn">⚠ unpriced: {{ overview.unpricedPositions.join(', ') }}</div>
+                </div>
+                <div class="overview-card">
+                  <div class="oc-label">Realized P&amp;L</div>
+                  <div class="oc-value" :class="pnlClass(overview.realizedPnl)">{{ fmtPnl(overview.realizedPnl ?? 0) }}</div>
+                  <div class="oc-sub">across {{ overview.closureCount ?? 0 }} lot closure{{ overview.closureCount !== 1 ? 's' : '' }}</div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Positions -->
+          <template v-else-if="activeTab === 'positions'">
+            <div v-if="positionsLoading" class="loading">loading positions</div>
+            <div v-else-if="positions.length === 0" class="empty-state">No open positions.</div>
+            <div v-else>
+              <div class="section-row">
+                <div class="section-title">Positions</div>
+                <div class="section-meta">{{ positions.length }} holding{{ positions.length !== 1 ? 's' : '' }}</div>
+              </div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th class="right">Quantity</th>
+                    <th class="right">Avg Cost</th>
+                    <th class="right">Mkt Price</th>
+                    <th class="right">Mkt Value</th>
+                    <th class="right">Unrealized P&amp;L</th>
+                    <th class="right">P&amp;L %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="p in positionsWithPnl" :key="p.symbol">
+                    <td class="symbol">{{ p.symbol }}</td>
+                    <td class="right mono">{{ fmtQty(p.quantity) }}</td>
+                    <td class="right mono">{{ fmtCurrency(p.avg_cost) }}</td>
+                    <td class="right mono" :class="p.current_price == null ? 'muted' : ''">{{ p.current_price != null ? fmtCurrency(p.current_price) : '—' }}</td>
+                    <td class="right mono" :class="p.market_value == null ? 'muted' : ''">{{ p.market_value != null ? fmtCurrency(p.market_value) : '—' }}</td>
+                    <td class="right mono" :class="pnlClass(p.unrealized_pnl)">{{ p.unrealized_pnl != null ? fmtPnl(p.unrealized_pnl) : '—' }}</td>
+                    <td class="right mono" :class="pnlClass(p.unrealized_pnl)">{{ p.unrealized_pnl_pct != null ? fmtPct(p.unrealized_pnl_pct) : '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+
+          <!-- Tax Lots -->
+          <template v-else-if="activeTab === 'taxlots'">
+            <div v-if="taxLotsLoading" class="loading">loading tax lots</div>
+            <div v-else-if="taxLots.length === 0" class="empty-state">No tax lots.</div>
+            <div v-else>
+              <div class="section-row">
+                <div class="section-title">Tax Lots</div>
+                <label style="font-size:11px;color:var(--text-muted);cursor:pointer;display:flex;gap:6px;align-items:center">
+                  <input type="checkbox" v-model="showClosedLots" @change="loadTaxLots" style="accent-color:var(--accent)" />
+                  show closed
+                </label>
+              </div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Acquired</th>
+                    <th class="right">Quantity</th>
+                    <th class="right">Cost / Share</th>
+                    <th class="right">Cost Basis</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="lot in taxLots" :key="lot.id">
+                    <td class="symbol">{{ lot.symbol }}</td>
+                    <td class="mono muted">{{ fmtDate(lot.acquired_date) }}</td>
+                    <td class="right mono">{{ fmtQty(lot.quantity) }}</td>
+                    <td class="right mono">{{ fmtCurrency(lot.cost_per_share) }}</td>
+                    <td class="right mono">{{ fmtCurrency(lot.cost_basis) }}</td>
+                    <td><span class="badge" :class="lot.closed ? 'badge-closed' : 'badge-open'">{{ lot.closed ? 'CLOSED' : 'OPEN' }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+
+          <!-- P&L -->
+          <template v-else-if="activeTab === 'pnl'">
+            <div v-if="pnlLoading" class="loading">loading p&amp;l</div>
+            <div v-else>
+              <!-- Realized -->
+              <div class="section-title" style="margin-bottom:12px">Realized Gains &amp; Losses</div>
+              <div v-if="realizedPnl.length === 0" class="empty-state" style="padding:20px 0;text-align:left">No closed positions yet.</div>
+              <table v-else class="data-table" style="margin-bottom:32px">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th class="right">Realized P&amp;L</th>
+                    <th class="right">Lot Closures</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="r in realizedPnl" :key="r.symbol">
+                    <td class="symbol">{{ r.symbol }}</td>
+                    <td class="right mono" :class="pnlClass(r.realized_pnl)">{{ fmtPnl(r.realized_pnl) }}</td>
+                    <td class="right mono muted">{{ r.closure_count }}</td>
+                  </tr>
+                  <tr style="border-top: 1px solid var(--border-2)">
+                    <td style="color:var(--text-muted);font-size:11px;letter-spacing:0.06em">TOTAL</td>
+                    <td class="right mono" :class="pnlClass(totalRealizedPnl)"><strong>{{ fmtPnl(totalRealizedPnl) }}</strong></td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <!-- Unrealized -->
+              <div class="section-title" style="margin-bottom:12px">Unrealized Gains &amp; Losses</div>
+              <div v-if="unrealizedBySymbol.length === 0" class="empty-state" style="padding:20px 0;text-align:left">No open positions.</div>
+              <table v-else class="data-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th class="right">Quantity</th>
+                    <th class="right">Avg Cost</th>
+                    <th class="right">Mkt Price</th>
+                    <th class="right">Cost Basis</th>
+                    <th class="right">Mkt Value</th>
+                    <th class="right">Unrealized P&amp;L</th>
+                    <th class="right">P&amp;L %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="u in unrealizedBySymbol" :key="u.symbol">
+                    <td class="symbol">{{ u.symbol }}</td>
+                    <td class="right mono">{{ fmtQty(u.quantity) }}</td>
+                    <td class="right mono">{{ fmtCurrency(u.avg_cost) }}</td>
+                    <td class="right mono" :class="u.current_price == null ? 'muted' : ''">{{ u.current_price != null ? fmtCurrency(u.current_price) : '—' }}</td>
+                    <td class="right mono">{{ fmtCurrency(u.cost_basis) }}</td>
+                    <td class="right mono" :class="u.market_value == null ? 'muted' : ''">{{ u.market_value != null ? fmtCurrency(u.market_value) : '—' }}</td>
+                    <td class="right mono" :class="pnlClass(u.unrealized_pnl)">{{ u.unrealized_pnl != null ? fmtPnl(u.unrealized_pnl) : '—' }}</td>
+                    <td class="right mono" :class="pnlClass(u.unrealized_pnl)">{{ u.unrealized_pnl_pct != null ? fmtPct(u.unrealized_pnl_pct) : '—' }}</td>
+                  </tr>
+                  <tr v-if="unrealizedBySymbol.length" style="border-top: 1px solid var(--border-2)">
+                    <td style="color:var(--text-muted);font-size:11px;letter-spacing:0.06em">TOTAL</td>
+                    <td></td><td></td><td></td>
+                    <td class="right mono muted">{{ fmtCurrency(totalCostBasis) }}</td>
+                    <td class="right mono muted">{{ fmtCurrency(totalMarketValue) }}</td>
+                    <td class="right mono" :class="pnlClass(totalUnrealizedPnl)"><strong>{{ fmtPnl(totalUnrealizedPnl) }}</strong></td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-if="unpricedPnlSymbols.length" class="overview-warn" style="margin-top:12px">⚠ unpriced symbols excluded: {{ unpricedPnlSymbols.join(', ') }}</div>
+            </div>
+          </template>
+
+          <!-- Orders -->
+          <template v-else-if="activeTab === 'orders'">
+            <div v-if="ordersLoading" class="loading">loading orders</div>
+            <div v-else>
+              <div class="section-row">
+                <div class="section-title">Orders</div>
+                <button class="btn btn-primary" style="font-size:11px;padding:5px 14px" @click="openOrderModal()">+ Place Order</button>
+              </div>
+
+              <!-- Pending Orders -->
+              <div v-if="pendingOrders.length > 0" style="margin-bottom:20px">
+                <div class="section-title" style="font-size:12px;margin-bottom:10px">Pending Orders</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div v-for="p in pendingOrders" :key="p.id" style="padding:10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:4px;display:flex;align-items:center;justify-content:space-between;font-size:12px">
+                    <div style="flex:1">
+                      <span class="symbol" style="cursor:pointer;color:var(--accent);text-decoration:underline" @click="quoteSymbol = p.symbol; lookupQuote()">{{ p.symbol }}</span>
+                      <span style="color:var(--text-muted);margin:0 8px">×</span>
+                      <span>{{ fmtQty(p.quantity) }}</span>
+                      <span style="color:var(--text-muted);margin-left:8px">{{ p.side }}</span>
+                      <span v-if="p.order_type && p.order_type !== 'MARKET'" style="color:var(--text-muted);margin-left:8px">· {{ p.order_type }}</span>
+                      <span v-if="p.limit_price" style="color:var(--text-muted);margin-left:8px">limit: {{ fmtCurrency(p.limit_price) }}</span>
+                      <span v-if="p.stop_price" style="color:var(--text-muted);margin-left:8px">stop: {{ fmtCurrency(p.stop_price) }}</span>
+                    </div>
+                    <div style="display:flex;gap:6px">
+                      <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px" @click="modifyPendingOrder(p)">Modify</button>
+                      <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px;color:var(--negative)" @click="cancelPendingOrder(p.id)">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="orders.length === 0" class="empty-state" style="padding:20px 0;text-align:left">No orders yet.</div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                    <th class="right">Quantity</th>
+                    <th>Type</th>
+                    <th class="right">Limit Price</th>
+                    <th class="right">Stop Price</th>
+                    <th>TIF</th>
+                    <th class="right">Fill Price</th>
+                    <th class="right">Total Value</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="o in orders" :key="o.id">
+                    <td class="mono muted">{{ fmtDateTime(o.created_at) }}</td>
+                    <td class="symbol" style="cursor:pointer;color:var(--accent);text-decoration:underline" @click="quoteSymbol = o.symbol; lookupQuote()">{{ o.symbol }}</td>
+                    <td :style="o.side === 'BUY' ? 'color:var(--accent)' : 'color:var(--text)'">{{ o.side }}</td>
+                    <td class="right mono">{{ fmtQty(o.quantity) }}</td>
+                    <td style="font-size:11px">{{ o.order_type ?? 'MARKET' }}</td>
+                    <td class="right mono">{{ o.limit_price != null ? fmtCurrency(o.limit_price) : '—' }}</td>
+                    <td class="right mono">{{ o.stop_price != null ? fmtCurrency(o.stop_price) : '—' }}</td>
+                    <td style="font-size:11px">{{ o.time_in_force ?? 'GTC' }}</td>
+                    <td class="right mono">{{ o.fill_price != null ? fmtCurrency(o.fill_price) : '—' }}</td>
+                    <td class="right mono">{{ o.total_value != null ? fmtCurrency(o.total_value) : '—' }}</td>
+                    <td><span class="badge" :class="`badge-${o.status.toLowerCase()}`">{{ o.status }}</span></td>
+                    <td class="muted" style="font-size:11px">{{ o.reject_reason ?? '' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+
+          <!-- Ledger -->
+          <template v-else-if="activeTab === 'ledger'">
+            <div v-if="ledgerLoading" class="loading">loading ledger</div>
+            <div v-else-if="ledger.length === 0" class="empty-state">No ledger entries.</div>
+            <div v-else>
+              <div class="section-row">
+                <div class="section-title">Ledger</div>
+                <div class="section-meta">{{ ledger.length }} entries</div>
+              </div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th class="right">Amount</th>
+                    <th class="right">Balance After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="e in ledger" :key="e.id">
+                    <td class="mono muted">{{ fmtDateTime(e.created_at) }}</td>
+                    <td><span :class="`entry-${e.entry_type}`">{{ e.entry_type }}</span></td>
+                    <td class="muted" style="font-size:11px">{{ e.description }}</td>
+                    <td class="right mono" :class="parseFloat(e.amount) >= 0 ? 'positive' : 'negative'">{{ fmtPnl(parseFloat(e.amount)) }}</td>
+                    <td class="right mono">{{ fmtCurrency(e.balance_after) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+
+        </div><!-- /tab-content -->
+      </template>
+    </main>
+  </div>
+
+  <!-- Place Order modal -->
+  <div v-if="showOrderModal" class="modal-overlay" @click.self="closeOrderModal">
+    <div class="modal" style="width:340px">
+      <h3>Place Order</h3>
+      <template v-if="!orderConfirming">
+        <div class="modal-field">
+          <label class="modal-label">Side</label>
+          <div class="side-toggle">
+            <button class="buy" :class="{ active: orderSide === 'BUY' }" @click="orderSide = 'BUY'">BUY</button>
+            <button class="sell" :class="{ active: orderSide === 'SELL' }" @click="orderSide = 'SELL'">SELL</button>
+          </div>
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Type</label>
+          <div class="type-toggle">
+            <button :class="{ active: orderType === 'MARKET' }" @click="orderType = 'MARKET'">MARKET</button>
+            <button :class="{ active: orderType === 'LIMIT' }" @click="orderType = 'LIMIT'">LIMIT</button>
+            <button :class="{ active: orderType === 'STOP' }" @click="orderType = 'STOP'">STOP</button>
+            <button :class="{ active: orderType === 'STOP_LIMIT' }" @click="orderType = 'STOP_LIMIT'">STOP LIMIT</button>
+          </div>
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Symbol</label>
+          <input v-model="orderSymbol" placeholder="e.g. AAPL" maxlength="12" style="text-transform:uppercase" @input="orderSymbol = orderSymbol.toUpperCase()" @blur="lookupOrderQuote" />
+        </div>
+        <div v-if="orderQuoteLoading" class="order-quote-preview">
+          <span class="oq-loading">Looking up {{ orderSymbol }}…</span>
+        </div>
+        <div v-else-if="orderQuote" class="order-quote-preview">
+          <div class="oq-row">
+            <span class="oq-label">{{ orderQuote.symbol }}</span>
+            <span v-if="orderSymbolPosition" class="oq-label">
+              POSITION <span style="color:var(--text)">{{ fmtQty(orderSymbolPosition.quantity) }} shares</span>
+            </span>
+            <span v-else class="oq-label">NO POSITION</span>
+          </div>
+          <div class="oq-spread">
+            <span :class="orderSide === 'SELL' ? 'oq-bid' : 'oq-ask'">
+              <span class="oq-label">PRICE </span>{{ (orderSide === 'SELL' ? orderQuote.bid : orderQuote.ask) != null ? '$' + (orderSide === 'SELL' ? orderQuote.bid : orderQuote.ask).toFixed(2) : '—' }}
+            </span>
+          </div>
+        </div>
+        <div v-else-if="orderQuoteError" class="order-quote-preview not-found">Symbol Not Found</div>
+        <div class="modal-field">
+          <label class="modal-label">Quantity</label>
+          <input v-model="orderQty" type="number" min="0.0001" step="1" placeholder="0" />
+          <div v-if="orderEstimatedTotal != null" style="margin-top:6px;font-size:12px;color:var(--text-muted)">
+            EST. TOTAL <span :style="orderSide === 'SELL' ? 'color:var(--negative)' : 'color:var(--positive)'" style="font-weight:600">{{ fmtCurrency(orderEstimatedTotal) }}</span>
+          </div>
+        </div>
+        <div v-if="orderType === 'LIMIT' || orderType === 'STOP_LIMIT'" class="modal-field">
+          <label class="modal-label">Limit Price</label>
+          <input v-model="orderLimitPrice" type="number" min="0.01" step="0.01" placeholder="0.00" />
+        </div>
+        <div v-if="orderType === 'STOP' || orderType === 'STOP_LIMIT'" class="modal-field">
+          <label class="modal-label">Stop Price</label>
+          <input v-model="orderStopPrice" type="number" min="0.01" step="0.01" placeholder="0.00" />
+        </div>
+        <div v-if="orderType !== 'MARKET'" class="modal-field">
+          <label class="modal-label">Time in Force</label>
+          <div class="type-toggle">
+            <button :class="{ active: orderTif === 'GTC' }" @click="orderTif = 'GTC'">GTC</button>
+            <button :class="{ active: orderTif === 'DAY' }" @click="orderTif = 'DAY'">DAY</button>
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top:16px">
+          <button class="btn btn-ghost" @click="closeOrderModal">Cancel</button>
+          <button
+            class="btn"
+            :class="orderSide === 'BUY' ? 'btn-primary' : 'btn-sell'"
+            :style="orderSide === 'SELL' ? 'background:var(--negative-bg);border-color:var(--negative);color:var(--negative)' : ''"
+            @click="submitOrder"
+            :disabled="orderSubmitting || !orderSymbol.trim() || !orderQty || ((orderType === 'LIMIT' || orderType === 'STOP_LIMIT') && !orderLimitPrice) || ((orderType === 'STOP' || orderType === 'STOP_LIMIT') && !orderStopPrice)"
+          >{{ orderSubmitting ? 'Submitting...' : orderSide }}</button>
+        </div>
+      </template>
+      <template v-else>
+        <div v-if="orderResult" class="modal-result" :class="orderResultClass" style="margin-bottom:16px">{{ orderResult }}</div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" style="width:100%" @click="closeOrderModal">Done</button>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Deposit / Withdraw modal -->
+  <div v-if="showTransferModal" class="modal-overlay" @click.self="closeTransferModal">
+    <div class="modal" style="width:320px">
+      <h3>Transfer Cash</h3>
+      <div class="type-toggle">
+        <button :class="{ 'active-deposit': transferType === 'deposit' }" @click="transferType = 'deposit'">DEPOSIT</button>
+        <button :class="{ 'active-withdraw': transferType === 'withdraw' }" @click="transferType = 'withdraw'">WITHDRAW</button>
+        <button :class="{ 'active-fee': transferType === 'fee' }" @click="transferType = 'fee'">FEE</button>
+        <button :class="{ 'active-reward': transferType === 'reward' }" @click="transferType = 'reward'">REWARD</button>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Amount (USD)</label>
+        <input v-model="transferAmount" type="number" min="0.01" step="100" placeholder="0.00" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Description</label>
+        <input v-model="transferDescription" type="text" placeholder="e.g. Monthly management fee" maxlength="120" />
+      </div>
+      <div v-if="transferResult" class="modal-result" :class="transferResultClass">{{ transferResult }}</div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn btn-ghost" @click="closeTransferModal">Cancel</button>
+        <button
+          class="btn btn-primary"
+          :style="{
+            'background': transferType === 'withdraw' ? '#2a1a00' : transferType === 'fee' ? 'var(--negative-bg)' : transferType === 'reward' ? 'var(--positive-bg)' : '',
+            'border-color': transferType === 'withdraw' ? 'var(--warning)' : transferType === 'fee' ? 'var(--negative)' : transferType === 'reward' ? 'var(--positive)' : '',
+            'color': transferType === 'withdraw' ? 'var(--warning)' : transferType === 'fee' ? 'var(--negative)' : transferType === 'reward' ? 'var(--positive)' : ''
+          }"
+          @click="submitTransfer"
+          :disabled="transferSubmitting || !transferAmount"
+        >{{ transferSubmitting ? 'Processing...' : (transferType === 'deposit' ? 'Deposit' : transferType === 'withdraw' ? 'Withdraw' : transferType === 'fee' ? 'Apply Fee' : 'Apply Reward') }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New account modal -->
+  <div v-if="showNewAccount" class="modal-overlay" @click.self="showNewAccount = false">
+    <div class="modal">
+      <h3>New Account</h3>
+      <input v-model="newAccountName" placeholder="Account name" @keyup.enter="createAccount" autofocus />
+      <div class="modal-actions">
+        <button class="btn btn-ghost" @click="showNewAccount = false">Cancel</button>
+        <button class="btn btn-primary" @click="createAccount" :disabled="!newAccountName.trim()">Create</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
+
+const BROKERAGE = 'http://localhost:8100';  // Docker: 8100 → container 8000
+const QUOTES    = 'http://localhost:8101';  // Docker: 8101 → container 8001
+
+createApp({
+  setup() {
+    // ── State ────────────────────────────────────────────────
+    const accounts       = ref([]);
+    const accountsLoading= ref(true);
+    const selectedId     = ref(null);
+    const balanceCache   = ref({});
+    const activeTab      = ref('overview');
+    const clock          = ref('');
+    const marketOpen     = ref(false);
+    const nextOpen       = ref(null);
+    const showNewAccount = ref(false);
+    const newAccountName = ref('');
+
+    // Quote lookup
+    const quoteSymbol = ref('');
+    const quote       = ref(null);
+    const quoteLoading= ref(false);
+    const quoteError  = ref(null);
+
+    // Place Order modal
+    const showOrderModal   = ref(false);
+    const orderSide        = ref('BUY');
+    const orderSymbol      = ref('');
+    const orderQty         = ref('');
+    const orderQuote       = ref(null);
+    const orderQuoteLoading= ref(false);
+    const orderQuoteError  = ref(false);
+    const orderSubmitting  = ref(false);
+    const orderConfirming  = ref(false);
+    const orderResult      = ref(null);
+    const orderResultClass = ref('');
+    const orderType        = ref('MARKET');
+    const orderLimitPrice  = ref('');
+    const orderStopPrice   = ref('');
+    const orderTif         = ref('GTC');
+
+    // Transfer modal
+    const showTransferModal   = ref(false);
+    const transferType        = ref('deposit');
+    const transferAmount      = ref('');
+    const transferDescription = ref('');
+    const transferSubmitting  = ref(false);
+    const transferResult      = ref(null);
+    const transferResultClass = ref('');
+
+    // Tab data
+    const overviewLoading  = ref(false);
+    const positionsLoading = ref(false);
+    const taxLotsLoading   = ref(false);
+    const pnlLoading       = ref(false);
+    const ordersLoading    = ref(false);
+    const ledgerLoading    = ref(false);
+
+    const overview          = ref({});
+    const positions         = ref([]);
+    const positionsWithPnl  = ref([]);
+    const taxLots           = ref([]);
+    const showClosedLots    = ref(false);
+    const realizedPnl       = ref([]);
+    const unrealizedBySymbol= ref([]);
+    const totalRealizedPnl  = ref(0);
+    const totalUnrealizedPnl= ref(0);
+    const totalCostBasis    = ref(0);
+    const totalMarketValue  = ref(0);
+    const unpricedPnlSymbols= ref([]);
+    const orders            = ref([]);
+    const ledger            = ref([]);
+
+    const tabs = [
+      { id: 'overview',  label: 'Overview'  },
+      { id: 'positions', label: 'Positions' },
+      { id: 'taxlots',   label: 'Tax Lots'  },
+      { id: 'pnl',       label: 'P&L'       },
+      { id: 'orders',    label: 'Orders'    },
+      { id: 'ledger',    label: 'Ledger'    },
+    ];
+
+    // ── Computed ──────────────────────────────────────────────
+    const selectedAccount = computed(() => accounts.value.find(a => a.id === selectedId.value));
+
+    const orderSymbolPosition = computed(() =>
+      positionsWithPnl.value.find(p => p.symbol === orderSymbol.value.trim().toUpperCase()) ?? null
+    );
+
+    const orderEstimatedTotal = computed(() => {
+      if (!orderQuote.value || !orderQty.value) return null;
+      const price = orderSide.value === 'SELL' ? orderQuote.value.bid : orderQuote.value.ask;
+      if (price == null) return null;
+      return parseFloat(orderQty.value) * price;
+    });
+
+    const pendingOrders = computed(() =>
+      orders.value.filter(o => o.status === 'PENDING')
+    );
+
+    const buyingPowerClass = computed(() => {
+      const bp = overview.value.buyingPower;
+      if (bp == null) return '';
+      return bp <= 0 ? 'negative' : bp < (overview.value.balance ?? 0) * 0.1 ? 'negative' : '';
+    });
+
+    // ── Formatters ────────────────────────────────────────────
+    const fmtCurrency = (n) => {
+      if (n == null) return '—';
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(n));
+    };
+    const fmtPnl = (n) => {
+      if (n == null) return '—';
+      const v = parseFloat(n);
+      const s = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(Math.abs(v));
+      return v >= 0 ? `+${s}` : `-${s}`;
+    };
+    const fmtPct = (n) => {
+      if (n == null) return '—';
+      const v = parseFloat(n);
+      return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    };
+    const fmtQty  = (n) => n == null ? '—' : parseFloat(n).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    const fmtDate = (s) => {
+      if (!s) return '—';
+      return new Date(s).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'2-digit' });
+    };
+    const fmtDateTime = (s) => {
+      if (!s) return '—';
+      const d = new Date(s);
+      return d.toLocaleDateString('en-US', { month:'2-digit', day:'2-digit' }) + ' ' +
+             d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
+    };
+    const fmtTime = (s) => {
+      if (!s) return '';
+      return new Date(s).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12: false });
+    };
+    const fmtRelTime = (s) => {
+      if (!s) return '';
+      const diff = (new Date(s) - Date.now()) / 1000;
+      if (diff < 60) return 'soon';
+      if (diff < 3600) return `in ${Math.round(diff/60)}m`;
+      if (diff < 86400) return `in ${Math.round(diff/3600)}h`;
+      return `in ${Math.round(diff/86400)}d`;
+    };
+    const pnlClass = (n) => {
+      if (n == null) return '';
+      return parseFloat(n) >= 0 ? 'positive' : 'negative';
+    };
+
+    // ── API helpers ───────────────────────────────────────────
+    const apiFetch = async (url, opts = {}) => {
+      const r = await fetch(url, opts);
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json();
+    };
+
+    // ── Market status ─────────────────────────────────────────
+    const refreshMarketStatus = async () => {
+      try {
+        const d = await apiFetch(`${BROKERAGE}/market/status`);
+        marketOpen.value = d.is_open;
+        nextOpen.value   = d.next_open;
+      } catch {}
+    };
+
+    // ── Accounts ──────────────────────────────────────────────
+    const loadAccounts = async () => {
+      accountsLoading.value = true;
+      try {
+        accounts.value = await apiFetch(`${BROKERAGE}/accounts`);
+        // Fetch balances for sidebar
+        for (const a of accounts.value) {
+          try {
+            const b = await apiFetch(`${BROKERAGE}/accounts/${a.id}/balance`);
+            balanceCache.value = { ...balanceCache.value, [a.id]: parseFloat(b.cash_balance) };
+          } catch {}
+        }
+      } finally {
+        accountsLoading.value = false;
+      }
+    };
+
+    const createAccount = async () => {
+      if (!newAccountName.value.trim()) return;
+      try {
+        await apiFetch(`${BROKERAGE}/accounts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newAccountName.value.trim() }),
+        });
+        newAccountName.value = '';
+        showNewAccount.value = false;
+        await loadAccounts();
+      } catch (e) { alert('Error: ' + e.message); }
+    };
+
+    const selectAccount = async (id) => {
+      selectedId.value = id;
+      activeTab.value  = 'overview';
+      overview.value   = {};
+      await loadOverview(id);
+    };
+
+    // ── Overview ──────────────────────────────────────────────
+    const loadOverview = async (id) => {
+      overviewLoading.value = true;
+      try {
+        const [bal, bp, real, unreal] = await Promise.allSettled([
+          apiFetch(`${BROKERAGE}/accounts/${id}/balance`),
+          apiFetch(`${BROKERAGE}/accounts/${id}/buying-power`),
+          apiFetch(`${BROKERAGE}/accounts/${id}/pnl/realized`),
+          apiFetch(`${BROKERAGE}/accounts/${id}/pnl/unrealized`),
+        ]);
+
+        const o = {};
+        if (bal.status === 'fulfilled')   o.balance      = parseFloat(bal.value.cash_balance);
+        if (bp.status  === 'fulfilled') {
+          o.buyingPower    = parseFloat(bp.value.buying_power);
+          o.reserved       = parseFloat(bp.value.reserved_for_pending_buys);
+          o.pendingBuys    = bp.value.pending_buy_count;
+          o.unpricedSymbols= bp.value.unpriced_symbols;
+        }
+        if (real.status === 'fulfilled') {
+          o.realizedPnl    = parseFloat(real.value.total_realized_pnl);
+          o.closureCount   = real.value.by_symbol.reduce((s, r) => s + r.closure_count, 0);
+        }
+        if (unreal.status === 'fulfilled') {
+          o.unrealizedPnl  = parseFloat(unreal.value.total_unrealized_pnl);
+          o.marketValue    = parseFloat(unreal.value.total_market_value);
+          o.costBasis      = parseFloat(unreal.value.total_cost_basis);
+          if (o.costBasis > 0) o.unrealizedPct = (o.unrealizedPnl / o.costBasis * 100);
+          o.unpricedPositions = unreal.value.unpriced_symbols;
+        }
+        overview.value = o;
+
+        // Update sidebar balance
+        if (o.balance != null)
+          balanceCache.value = { ...balanceCache.value, [id]: o.balance };
+      } finally {
+        overviewLoading.value = false;
+      }
+    };
+
+    // ── Positions ─────────────────────────────────────────────
+    const loadPositions = async () => {
+      if (!selectedId.value) return;
+      positionsLoading.value = true;
+      try {
+        const [pos, unreal] = await Promise.allSettled([
+          apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/positions`),
+          apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/pnl/unrealized`),
+        ]);
+
+        if (pos.status === 'fulfilled') positions.value = pos.value;
+
+        // Merge unrealized P&L into positions
+        const pnlMap = {};
+        if (unreal.status === 'fulfilled') {
+          for (const u of unreal.value.by_symbol) pnlMap[u.symbol] = u;
+        }
+        positionsWithPnl.value = (pos.value ?? []).map(p => ({
+          ...p, ...(pnlMap[p.symbol] ?? {}),
+        }));
+      } finally {
+        positionsLoading.value = false;
+      }
+    };
+
+    // ── Tax Lots ──────────────────────────────────────────────
+    const loadTaxLots = async () => {
+      if (!selectedId.value) return;
+      taxLotsLoading.value = true;
+      try {
+        taxLots.value = await apiFetch(
+          `${BROKERAGE}/accounts/${selectedId.value}/tax-lots?include_closed=${showClosedLots.value}`
+        );
+      } finally {
+        taxLotsLoading.value = false;
+      }
+    };
+
+    // ── P&L ───────────────────────────────────────────────────
+    const loadPnl = async () => {
+      if (!selectedId.value) return;
+      pnlLoading.value = true;
+      try {
+        const [real, unreal] = await Promise.allSettled([
+          apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/pnl/realized`),
+          apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/pnl/unrealized`),
+        ]);
+        if (real.status === 'fulfilled') {
+          realizedPnl.value     = real.value.by_symbol;
+          totalRealizedPnl.value= parseFloat(real.value.total_realized_pnl);
+        }
+        if (unreal.status === 'fulfilled') {
+          unrealizedBySymbol.value  = unreal.value.by_symbol;
+          totalUnrealizedPnl.value  = parseFloat(unreal.value.total_unrealized_pnl);
+          totalCostBasis.value      = parseFloat(unreal.value.total_cost_basis);
+          totalMarketValue.value    = parseFloat(unreal.value.total_market_value);
+          unpricedPnlSymbols.value  = unreal.value.unpriced_symbols;
+        }
+      } finally {
+        pnlLoading.value = false;
+      }
+    };
+
+    // ── Orders ────────────────────────────────────────────────
+    const loadOrders = async () => {
+      if (!selectedId.value) return;
+      ordersLoading.value = true;
+      try {
+        orders.value = await apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/orders?limit=200`);
+      } finally {
+        ordersLoading.value = false;
+      }
+    };
+
+    // ── Ledger ────────────────────────────────────────────────
+    const loadLedger = async () => {
+      if (!selectedId.value) return;
+      ledgerLoading.value = true;
+      try {
+        ledger.value = await apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/ledger?limit=200`);
+      } finally {
+        ledgerLoading.value = false;
+      }
+    };
+
+    // ── Tab switching ─────────────────────────────────────────
+    const switchTab = (tab) => {
+      activeTab.value = tab;
+      if (tab === 'positions') loadPositions();
+      else if (tab === 'taxlots')  loadTaxLots();
+      else if (tab === 'pnl')      loadPnl();
+      else if (tab === 'orders')   loadOrders();
+      else if (tab === 'ledger')   loadLedger();
+    };
+
+    // ── Place Order ───────────────────────────────────────────
+    const lookupOrderQuote = async () => {
+      const sym = orderSymbol.value.trim();
+      if (!sym) { orderQuote.value = null; orderQuoteError.value = false; return; }
+      orderQuoteLoading.value = true; orderQuote.value = null; orderQuoteError.value = false;
+      try {
+        orderQuote.value = await apiFetch(`${QUOTES}/quotes/${sym}`);
+      } catch {
+        orderQuoteError.value = true;
+      } finally {
+        orderQuoteLoading.value = false;
+      }
+    };
+    const openOrderModal = (sym = '') => {
+      orderSymbol.value = sym; orderQty.value = ''; orderResult.value = null;
+      orderQuote.value = null; orderQuoteError.value = false; orderConfirming.value = false;
+      orderSide.value = 'BUY'; showOrderModal.value = true;
+      loadPositions();
+      if (sym) lookupOrderQuote();
+    };
+    const closeOrderModal = () => {
+      showOrderModal.value = false; orderResult.value = null; orderConfirming.value = false;
+      orderType.value = 'MARKET'; orderLimitPrice.value = ''; orderStopPrice.value = ''; orderTif.value = 'GTC';
+    };
+    const submitOrder = async () => {
+      if (!selectedId.value || !orderSymbol.value.trim() || !orderQty.value) return;
+      orderSubmitting.value = true; orderResult.value = null;
+      try {
+        const payload = {
+          symbol: orderSymbol.value.trim(),
+          side: orderSide.value,
+          quantity: parseFloat(orderQty.value),
+          order_type: orderType.value,
+          time_in_force: orderTif.value,
+        };
+        if (orderType.value === 'LIMIT' || orderType.value === 'STOP_LIMIT')
+          payload.limit_price = parseFloat(orderLimitPrice.value);
+        if (orderType.value === 'STOP' || orderType.value === 'STOP_LIMIT')
+          payload.stop_price = parseFloat(orderStopPrice.value);
+
+        const o = await apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (o.status === 'FILLED') {
+          orderResult.value = `✓ ${o.side} ${fmtQty(o.quantity)} ${o.symbol} filled @ ${fmtCurrency(o.fill_price)} · Total ${fmtCurrency(o.total_value)}`;
+          orderResultClass.value = 'success';
+        } else if (o.status === 'PENDING') {
+          orderResult.value = `⏳ Order queued. Will fill when conditions are met.`;
+          orderResultClass.value = 'pending';
+        } else {
+          orderResult.value = `✗ Rejected: ${o.reject_reason}`;
+          orderResultClass.value = 'error';
+        }
+        // Refresh overview + orders tab if open
+        await loadOverview(selectedId.value);
+        if (activeTab.value === 'orders') loadOrders();
+        if (activeTab.value === 'positions') loadPositions();
+      } catch (e) {
+        orderResult.value = `Error: ${e.message}`;
+        orderResultClass.value = 'error';
+      } finally {
+        orderSubmitting.value = false;
+        orderConfirming.value = true;
+      }
+    };
+
+    // ── Manage Pending Orders ─────────────────────────────────
+    const cancelPendingOrder = async (orderId) => {
+      if (!selectedId.value || !confirm('Cancel this order?')) return;
+      try {
+        await apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/orders/${orderId}`, {
+          method: 'DELETE',
+        });
+        await loadOrders();
+        await loadOverview(selectedId.value);
+      } catch (e) {
+        alert(`Error cancelling order: ${e.message}`);
+      }
+    };
+
+    const modifyPendingOrder = async (order) => {
+      orderSide.value = order.side;
+      orderSymbol.value = order.symbol;
+      orderQty.value = String(order.quantity);
+      orderType.value = order.order_type ?? 'MARKET';
+      orderLimitPrice.value = order.limit_price != null ? String(order.limit_price) : '';
+      orderStopPrice.value = order.stop_price != null ? String(order.stop_price) : '';
+      orderTif.value = order.time_in_force ?? 'GTC';
+      orderResult.value = null;
+      orderConfirming.value = false;
+      showOrderModal.value = true;
+      await cancelPendingOrder(order.id);
+      loadPositions();
+      lookupOrderQuote();
+    };
+
+    // ── Deposit / Withdraw ────────────────────────────────────
+    const closeTransferModal = () => {
+      showTransferModal.value = false; transferResult.value = null; transferDescription.value = '';
+    };
+    const submitTransfer = async () => {
+      if (!selectedId.value || !transferAmount.value) return;
+      transferSubmitting.value = true; transferResult.value = null;
+      const endpoint = transferType.value === 'deposit' ? 'deposit' : transferType.value === 'withdraw' ? 'withdraw' : transferType.value === 'fee' ? 'fee' : 'reward';
+      try {
+        const e = await apiFetch(`${BROKERAGE}/accounts/${selectedId.value}/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: parseFloat(transferAmount.value), description: transferDescription.value }),
+        });
+        const labels = { deposit: 'Deposited', withdraw: 'Withdrawn', fee: 'Fee applied', reward: 'Reward applied' };
+        const label = labels[transferType.value] || 'Transfer complete';
+        transferResult.value = `✓ ${label} ${fmtCurrency(parseFloat(transferAmount.value))} · New balance ${fmtCurrency(e.balance_after)}`;
+        transferResultClass.value = 'success';
+        transferAmount.value = '';
+        transferDescription.value = '';
+        await loadOverview(selectedId.value);
+        if (activeTab.value === 'ledger') loadLedger();
+      } catch (e) {
+        transferResult.value = `Error: ${e.message}`;
+        transferResultClass.value = 'error';
+      } finally {
+        transferSubmitting.value = false;
+      }
+    };
+
+    // ── Quote lookup ──────────────────────────────────────────
+    const lookupQuote = async () => {
+      const sym = quoteSymbol.value.trim().toUpperCase();
+      if (!sym) return;
+      quote.value = null; quoteError.value = null; quoteLoading.value = true;
+      try {
+        quote.value = await apiFetch(`${QUOTES}/quotes/${sym}`);
+      } catch (e) {
+        quoteError.value = e.message.includes('404') ? `No data for ${sym}` : 'Quote unavailable';
+      } finally {
+        quoteLoading.value = false;
+      }
+    };
+
+    // ── Clock ─────────────────────────────────────────────────
+    let clockInterval;
+    const updateClock = () => {
+      clock.value = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      });
+    };
+
+    // ── Init ──────────────────────────────────────────────────
+    onMounted(async () => {
+      updateClock();
+      clockInterval = setInterval(updateClock, 1000);
+      await Promise.all([loadAccounts(), refreshMarketStatus()]);
+      setInterval(refreshMarketStatus, 30_000);
+    });
+
+    onUnmounted(() => clearInterval(clockInterval));
+
+    return {
+      accounts, accountsLoading, selectedId, selectedAccount, balanceCache,
+      activeTab, tabs, clock, marketOpen, nextOpen,
+      showNewAccount, newAccountName,
+      quoteSymbol, quote, quoteLoading, quoteError,
+      overviewLoading, positionsLoading, taxLotsLoading, pnlLoading, ordersLoading, ledgerLoading,
+      overview, buyingPowerClass,
+      positions, positionsWithPnl,
+      taxLots, showClosedLots,
+      realizedPnl, unrealizedBySymbol, totalRealizedPnl, totalUnrealizedPnl,
+      totalCostBasis, totalMarketValue, unpricedPnlSymbols,
+      orders, pendingOrders, ledger,
+      fmtCurrency, fmtPnl, fmtPct, fmtQty, fmtDate, fmtDateTime, fmtTime, fmtRelTime, pnlClass,
+      lookupQuote, createAccount, selectAccount, switchTab, loadTaxLots,
+      showOrderModal, orderSide, orderSymbol, orderQty, orderType, orderLimitPrice, orderStopPrice, orderTif, orderSubmitting, orderConfirming, orderResult, orderResultClass,
+      orderQuote, orderQuoteLoading, orderQuoteError, orderSymbolPosition, orderEstimatedTotal, lookupOrderQuote,
+      openOrderModal, closeOrderModal, submitOrder, cancelPendingOrder, modifyPendingOrder,
+      showTransferModal, transferType, transferAmount, transferDescription, transferSubmitting, transferResult, transferResultClass,
+      closeTransferModal, submitTransfer,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

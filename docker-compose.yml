@@ -1,0 +1,46 @@
+services:
+
+  marketdata:
+    build:
+      context: ./marketdata
+      dockerfile: Dockerfile
+    ports:
+      - "8101:8001"
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  brokerage:
+    build:
+      context: ./brokerage
+      dockerfile: Dockerfile
+    ports:
+      - "8100:8000"
+    env_file:
+      - .env
+    environment:
+      # Override so brokerage reaches marketdata via Docker network, not localhost
+      QUOTES_API_URL: http://marketdata:8001
+      DATA_DIR: /data
+    volumes:
+      - brokerage-data:/data
+    depends_on:
+      marketdata:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  brokerage-data:
+    driver: local
