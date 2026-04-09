@@ -382,6 +382,7 @@
       <span class="q-bid">B&nbsp;<span class="q-val">{{ quote.bid != null ? fmtCurrency(quote.bid) : '—' }}</span></span>
       <span class="q-ask">A&nbsp;<span class="q-val">{{ quote.ask != null ? fmtCurrency(quote.ask) : '—' }}</span></span>
       <span class="q-bid">{{ fmtTime(quote.timestamp) }}</span>
+      <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px;margin-left:auto" @click="openOrderModal(quote.symbol)">Trade</button>
     </div>
 
     <div class="topbar-spacer"></div>
