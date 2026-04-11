@@ -885,8 +885,8 @@
 <script>
 const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
 
-const BROKERAGE = 'http://localhost:8100';  // Docker: 8100 → container 8000
-const QUOTES    = 'http://localhost:8101';  // Docker: 8101 → container 8001
+const BROKERAGE = '/api';           // Proxied through nginx
+const QUOTES    = '/marketdata';    // Proxied through nginx
 
 createApp({
   setup() {
