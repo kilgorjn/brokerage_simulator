@@ -1,0 +1,12 @@
+# Stack environment variables for Portainer deployment
+# Copy this file to .env in Portainer's stack environment editor
+
+# Brokerage and MarketData database path (mounted volume on server)
+DATA_DIR=/data
+
+# Quotes API configuration (internal Docker network)
+QUOTES_API_URL=http://marketdata:8001
+
+# Add your .env secrets here if needed
+# Example:
+# API_KEY=your_key_here
